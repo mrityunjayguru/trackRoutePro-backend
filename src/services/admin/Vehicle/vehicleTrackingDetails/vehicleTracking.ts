@@ -11,6 +11,7 @@ import {
 } from "./_validation";
 const moment = require("moment");
 import Helper from "../../../../helper";
+import {calculateTotalTripTime} from "../../../../helper/calculateTotalTripTime"
 import _ from "lodash";
 import { UploadAndcreateExcelFile } from "../../../../helper/Scheduler";
 const mongoose = require("mongoose");
@@ -309,25 +310,22 @@ export const getByVehicleID = async (req: Request, res: Response) => {
       }
 
       // Calculate total travel time
-      let totalTimeLogs: any = await VehicletrackingLogs.find({
-        deviceIMEI: req.body.deviceId,
-        "ignition.status": true,
-        currentSpeed: { $gt: 0 },
-        createdAt: { $gte: twentyFourHoursAgo },
-      });
-
-      if (totalTimeLogs.length > 0) {
-        let totalStartTime = totalTimeLogs[0].createdAt;
-        let totalEndTime = totalTimeLogs[totalTimeLogs.length - 1].createdAt;
-        let totalDiffInMillis = totalEndTime - totalStartTime;
-
-        let totalHours = Math.floor(totalDiffInMillis / (1000 * 60 * 60));
-        let totalMinutes = Math.floor(
-          (totalDiffInMillis % (1000 * 60 * 60)) / (1000 * 60)
-        );
+      let totalTimeLogs: any = await createSummary.aggregate([
+        {
+          $match: {
+            imei: req.body.deviceId
+          },
+        },
+        {
+          $match: matchfilter,
+        },
+        { $sort: { createdAt: -1 } },
+        
+      ]);
+     let timediff=await calculateTotalTripTime(totalTimeLogs)
+    
         // let totalSeconds = Math.floor((totalDiffInMillis % (1000 * 60)) / 1000);
-        summary.total_travel_time = `${totalHours}H ${totalMinutes}M`;
-      }
+        summary.total_travel_time =timediff
     }
     Object.assign(data[0], { summary: summary });
   }
@@ -336,147 +334,109 @@ export const getByVehicleID = async (req: Request, res: Response) => {
 };
 
 export const rootHistory = async (req: Request, res: Response) => {
-  let data: any;
-  let payload = { status: "Active" };
-  let datefilterpayload: any = {};
-  const timefilterpayload: any = {};
+  try {
+    let payload: any = { status: "Active" };
+    let datefilterpayload: any = {};
+    let timefilterpayload: any = {};
 
-  if (req.body.imei) {
-    Object.assign(payload, { imei: req.body.imei });
-  }
-  // Build the date filter if start or end date is provided
-  if (req.body.startdate) {
-    Object.assign(datefilterpayload, { $gte: req.body.startdate });
-  }
-  if (req.body.enddate) {
-    Object.assign(datefilterpayload, { $lte: req.body.enddate });
-  }
-  // Build the time filter if start or end time is provided
-  if (req.body.starttime) {
-    Object.assign(timefilterpayload, { $gte: req.body.starttime });
-  }
-  if (req.body.endtime) {
-    Object.assign(timefilterpayload, { $lte: req.body.endtime });
-  }
-  // Conditional filter logic to combine date and time if both are provided
-  let finalDateMatch: any = { dateFiled: datefilterpayload };
-  // Query 1
-  // let data1 = await Device.aggregate([
-  //   { $match: payload },
-  //   {
-  //     $lookup: {
-  //       from: "Vehicletracking",
-  //       let: { tracking: "$imei" },
-  //       pipeline: [
-  //         {
-  //           $match: {
-  //             $expr: { $eq: ["$deviceIMEI", "$$tracking"] },
-  //           },
-  //         },
-  //       ],
-  //       as: "trackingData",
-  //     },
-  //   },
+    if (req.body.imei) {
+      payload.imei = req.body.imei;
+    }
 
-  //   { $unwind: { path: "$trackingData", preserveNullAndEmptyArrays: true } },
-  //   {
-  //     $lookup: {
-  //       from: "vehicleType",
-  //       localField: "vehicleType",
-  //       foreignField: "_id",
-  //       as: "vehicletype",
-  //     },
-  //   },
-  //   { $unwind: { path: "$vehicletype", preserveNullAndEmptyArrays: true } },
-  //   {
-  //     $addFields: {
-  //       dateFiled: {
-  //         $dateToString: {
-  //           format: "%Y-%m-%d %H:%M:%S",
-  //           date: "$trackingData.createdAt",
-  //           timezone: "Asia/Kolkata",
-  //         },
-  //       },
-  //     },
-  //   },
-  //   {
-  //     $match: finalDateMatch, // Match based on date and time filters
-  //   },
-  //   {
-  //     $project: {
-  //       _id: 0,
-  //       imei: 1,
-  //       "vehicletype.icons": 1,
-  //       "vehicletype.vehicleTypeName": 1,
-  //       "trackingData.course": 1,
-  //       "trackingData.ignition": 1,
-  //       "trackingData.location": 1,
-  //       "trackingData.createdAt": 1,
-  //       "trackingData.currentSpeed": 1,
-  //       dateFiled: 1,
-  //     },
-  //   },
-  // ]);
+    // Build the date filter if start or end date is provided
+    if (req.body.startdate) {
+      datefilterpayload.$gte = req.body.startdate;
+    }
+    if (req.body.enddate) {
+      datefilterpayload.$lte = req.body.enddate;
+    }
 
-  // Query 2
-  let data2 = await Device.aggregate([
-    { $match: payload },
-    {
-      $lookup: {
-        from: "VehicletrackingLogs",
-        let: { tracking: "$imei" },
-        pipeline: [
-          {
-            $match: {
-              $expr: { $eq: ["$deviceIMEI", "$$tracking"] },
+    // Build the time filter if start or end time is provided
+    if (req.body.starttime) {
+      timefilterpayload.$gte = req.body.starttime;
+    }
+    if (req.body.endtime) {
+      timefilterpayload.$lte = req.body.endtime;
+    }
+
+    // Combine filters
+    let finalDateMatch: any = {};
+    if (Object.keys(datefilterpayload).length || Object.keys(timefilterpayload).length) {
+      finalDateMatch["dateFiled"] = {
+        ...datefilterpayload,
+        ...timefilterpayload,
+      };
+    }
+
+    // Apply additional filter for createdAt and deviceIMEI
+    if (req.body.startdate && req.body.imei) {
+      finalDateMatch["trackingData.createdAt"] = {
+        ...finalDateMatch["trackingData.createdAt"],
+        $gte: new Date(req.body.startdate),
+      };
+    }
+
+    console.log("Final Date Match:", finalDateMatch);
+
+    let data2 = await Device.aggregate([
+      { $match: payload },
+      {
+        $lookup: {
+          from: "VehicletrackingLogs",
+          let: { tracking: "$imei" },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ["$deviceIMEI", "$$tracking"] },
+              },
             },
-          },
-        ],
-        as: "trackingData",
+          ],
+          as: "trackingData",
+        },
       },
-    },
-    { $unwind: { path: "$trackingData", preserveNullAndEmptyArrays: true } },
-    {
-      $lookup: {
-        from: "vehicleType",
-        localField: "vehicleType",
-        foreignField: "_id",
-        as: "vehicletype",
+      { $unwind: { path: "$trackingData", preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: "vehicleType",
+          localField: "vehicleType",
+          foreignField: "_id",
+          as: "vehicletype",
+        },
       },
-    },
-    { $unwind: { path: "$vehicletype", preserveNullAndEmptyArrays: true } },
-    {
-      $addFields: {
-        dateFiled: {
-          $dateToString: {
-            format: "%Y-%m-%d %H:%M:%S",
-            date: "$trackingData.createdAt",
-            timezone: "Asia/Kolkata",
+      { $unwind: { path: "$vehicletype", preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          dateFiled: {  // ✅ Use a new field name
+            $dateToString: {
+              format: "%Y-%m-%d %H:%M:%S",
+              date: "$trackingData.createdAt"
+            },
           },
         },
       },
-    },
-    {
-      $match: finalDateMatch, // Match based on date and time filters
-    },
-    {
-      $project: {
-        _id: 0,
-        imei: 1,
-        "vehicletype.icons": 1,
-        "vehicletype.vehicleTypeName": 1,
-        "trackingData.course": 1,
-        "trackingData.ignition": 1,
-        "trackingData.location": 1,
-        "trackingData.createdAt": 1,
-        "trackingData.currentSpeed": 1,
-        dateFiled: 1,
+      { $match: finalDateMatch }, // Apply date & IMEI filtering
+      { $sort: { "trackingData.createdAt": -1 } }, // Sorting after filtering
+      {
+        $project: {
+          _id: 0,
+          imei: 1,
+          "vehicletype.icons": 1,
+          "vehicletype.vehicleTypeName": 1,
+          "trackingData.course": 1,
+          "trackingData.ignition": 1,
+          "trackingData.location": 1,
+          "trackingData.createdAt": 1,
+          "trackingData.currentSpeed": 1,
+          dateFiled: 1,
+        },
       },
-    },
-  ]);
-
-  data = [...data2];
-  res.status(200).json({ data: data, message: "success", status: 200 });
+    ]);
+console.log(data2.length)
+    res.status(200).json({ data: data2, message: "success", status: 200 });
+  } catch (error) {
+    console.error("Error fetching tracking history:", error);
+    res.status(500).json({ message: "Internal Server Error", status: 500 });
+  }
 };
 
 export const update = async (req: Request, res: Response) => {
@@ -1690,3 +1650,4 @@ const formatDate = (date: any) => {
   const dd = String(date.getDate()).padStart(2, "0"); // Get day with 2 digits
   return `${yyyy}-${mm}-${dd}`; // Format as YYYY-MM-DD
 };
+
