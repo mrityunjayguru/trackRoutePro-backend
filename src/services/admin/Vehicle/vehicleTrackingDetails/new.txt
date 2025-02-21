@@ -1,0 +1,34 @@
+ // if (
+      //   Number(records.currentSpeed) < Number(newRecords?.maxSpeed) &&
+      //   newRecords?.Alearts?.lessSpeed === true && newRecords?.result?.notificationPermission?.Over_Speed==true
+      // ) {
+      //   updatepayload.maxSpeed = true;
+      //   updatepayload.lessSpeed = false;
+      //   const notificationPayload = {
+      //     notification: {
+      //       title: `ALERT:Speed Decreased Below Limit`,
+      //       body: `Detected for ${newRecords?.driverName}, Vehicle No: ${newRecords?.vehicleNo}`,
+      //     },
+      //     token: newRecords.result.firebaseToken,
+      //      android: {
+      //             notification: {
+      //               sound:"message_alert.mp3",
+      //             }
+      //           },
+      //           apns: {
+      //             payload: {
+      //               aps: {
+      //                 sound:"message_alert.mp3",
+      //               }
+      //             }
+      //           }
+      //   };
+      //   await sendNotification(
+      //     notificationPayload,
+      //     newRecords.ownerID,
+      //     records.deviceIMEI,
+      //     _id,
+      //     records.location,
+      //     "Speed"
+      //   );
+      // }

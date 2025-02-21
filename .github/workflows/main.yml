@@ -1,0 +1,30 @@
+name: SSH Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.5.3
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+    - name: SSH into EC2 instance and deploy
+      run: |
+        ssh -o StrictHostKeyChecking=no ubuntu@3.108.26.115 << 'EOF'
+        cd /home/ubuntu/trackRoutePro-backend
+        sudo git pull origin main
+        sudo npm install
+        sudo npx tsc
+        pm2 restart track-ro
+        echo "Deployment completed"
+        EOF
