@@ -22,12 +22,10 @@ let AllPermission:any;
 export const create = async (req: Request, res: Response) => {
   try {
     let records: any = await tracking.create({
-      ...req.body,
-      createdAt: new Date().toISOString(),
+      ...req.body
     });
     await VehicletrackingLogs.create({
-      ...req.body,
-      createdAt: new Date().toISOString(),
+      ...req.body
     });
 
     // Send success response
@@ -68,24 +66,19 @@ export const getByVehicleID = async (req: Request, res: Response) => {
     Object.assign(payload, { dateFiled: req.body.enddimt });
   }
 
-  //   const date = new Date();
-  // let curdate = Date.now();
-  // console.log(curdate,"curdatecurdate")
-  // const date = new Date();
-  // let curdate = date.toString();
   data = await Device.aggregate([
     {
-      $match: payload, // Match the device by deviceId or _id
+      $match: payload, 
     },
     {
       $lookup: {
         from: "Vehicletracking",
-        let: { tracking: "$imei" }, // Define variable for deviceId
+        let: { tracking: "$imei" }, 
         pipeline: [
           {
             $match: {
               $expr: {
-                $and: [{ $eq: ["$deviceIMEI", "$$tracking"] }], // Match deviceID with the tracking variable
+                $and: [{ $eq: ["$deviceIMEI", "$$tracking"] }], 
               },
             },
           },
@@ -200,9 +193,10 @@ export const getByVehicleID = async (req: Request, res: Response) => {
   if (req.body.deviceId) {
     let matchfilter: any = {};
 
-    const twentyFourHoursAgo = moment().subtract(24, "hours").toDate();
-    let mydate: any = formatDate(twentyFourHoursAgo);
-    Object.assign(matchfilter, { createdAt: { $gte: new Date(mydate) } });
+    const twentyFourHoursAgo = moment().subtract(24, "hours").format("YYYY-MM-DD");
+
+    // let mydate: any = formatDate(twentyFourHoursAgo);
+    Object.assign(matchfilter, { createdAt: { $gte: new Date(twentyFourHoursAgo) } });
 
     let logs: any = await VehicletrackingLogs.find({
       deviceIMEI: req.body.deviceId,
@@ -224,8 +218,7 @@ export const getByVehicleID = async (req: Request, res: Response) => {
       let latesttripOn: any = await createSummary.aggregate([
         {
           $match: {
-            imei: req.body.deviceId,
-            igitionOn: true,
+            imei: req.body.deviceId
           },
         },
         {
@@ -233,30 +226,24 @@ export const getByVehicleID = async (req: Request, res: Response) => {
         },
         { $sort: { createdAt: -1 } },
         {
-          $limit: 1,
+          $limit: 3,
         },
       ]);
+      let newval:any=[]
 
-      let latesttripOf: any = await createSummary.aggregate([
-        {
-          $match: {
-            imei: req.body.deviceId,
-            igitionOF: false,
-          },
-        },
-        {
-          $match: matchfilter,
-        },
-        { $sort: { createdAt: -1 } },
-        {
-          $limit: 1,
-        },
-      ]);
-      // console.log(latesttripOf,"latesttripOflatesttripOf")
-      // console.log(latesttripOn,"latesttripOnlatesttripOn")
-      let arr = [...latesttripOf, ...latesttripOn];
+      if (latesttripOn.length > 0 && latesttripOn[0]?.igitionOn === true) {
+          // Push the next two records if they exist
+          for (let i = 1; i < Math.min(3, latesttripOn.length); i++) {
+              newval.push(latesttripOn[i]);
+          }
+      } else {
+          // If the first record is not igitionOn, push all records
+          for (let i = 0; i < latesttripOn.length; i++) {
+              newval.push(latesttripOn[i]);
+          }
+      }
 
-      let totalTripDistance = arr.reduce(
+      let totalTripDistance = newval.reduce(
         (distance: any, log: any, index: any) => {
           if (index < logs.length - 1) {
             return (
@@ -273,16 +260,19 @@ export const getByVehicleID = async (req: Request, res: Response) => {
       summary.total_travel_km = totalDistance / 1000;
 
       // Calculate trip time
-      let startTime = latesttripOn[0].createdAt;
-      let endTime = latesttripOf[0].createdAt;
+      let startTime = newval[1].createdAt;
+      let endTime = newval[0].createdAt;
       let diffInMillis = endTime - startTime;
 
       let diffInHours = Math.floor(diffInMillis / (1000 * 60 * 60));
       let diffInMinutes = Math.floor(
         (diffInMillis % (1000 * 60 * 60)) / (1000 * 60)
       );
-      // let diffInSeconds = Math.floor((diffInMillis % (1000 * 60)) / 1000);
-      summary.latest_trip_time = `${diffInHours}H ${diffInMinutes}M`;
+      if (diffInHours >= 24) {
+        summary.latest_trip_time = "00:00";
+    } else {
+        summary.latest_trip_time = `${diffInHours}H ${diffInMinutes}M`;
+    }
 
       // Fetch max speed
       let maxSpeedRecord: any = await VehicletrackingLogs.findOne({
@@ -832,7 +822,9 @@ const sendPushNotification = async (records: any, _id: any) => {
     // cashingAlearts
     if (data && data.length > 0) {
       let newRecords = data[0];
-      AllPermission=newRecords?.notificationPermission?.all;
+      console.log(newRecords?.result?.notificationPermission?.all,"newRecords?.notificationPermission?.all")
+      AllPermission=newRecords?.result?.notificationPermission?.all;
+
       var sendPermission: any;
       // console.log(newRecords,"newRecordsnewRecords")
       var updatepayload: any = {};
@@ -1340,8 +1332,11 @@ const sendNotification = async (
   sendPermission:any
 ) => {
   try {
+   
+   
+
     if(sendPermission && AllPermission){
-      const notificationResult: any = await Helper.sendPushNotification(
+      await Helper.sendPushNotification(
         notificationPayload
       );
     }
@@ -1673,7 +1668,7 @@ export const summary = async (req: Request, res: Response) => {
       data.push(summary);
     }
 
-    let files = await UploadAndcreateExcelFile(data);
+    let files = await UploadAndcreateExcelFile(data,"summary");
     // Once the loop is finished, you can return or process the data for all devices.
     return res.status(200).json({ data: files });
   } catch (err) {

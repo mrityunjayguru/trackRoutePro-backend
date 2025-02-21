@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { subscriber, vehicle,deviceType } from "./_validation"; // Adjust the import path according to your project structure
+import { subscriber, vehicle } from "./_validation"; // Adjust the import path according to your project structure
 import mongoose from "mongoose";
 
 export const getSubscribers = async (req: Request, res: Response) => {

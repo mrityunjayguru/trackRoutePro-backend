@@ -4,8 +4,9 @@ import { VehicletrackingLogsSchema } from "../models/VehicletrackingLogs";
 import { vehicleDetailsSchema } from "../models/Vehicle";
 // import path from "path"
 import { model } from "mongoose";
-import xlsx from "xlsx";
-import fs from "fs"
+
+import * as xlsx from "xlsx";
+import fs from "fs";
 import { uploadFile } from "./awsS3";
 import { ExpirySubscriptionMail } from "../MailBody/ExpirySubscriptionMail";
 import helper from "../helper";
@@ -87,7 +88,7 @@ export const scheduleTask = () => {
       const insertedIds = pusharr.map((record: any) => record._id);
 
       // Delete the records from the tracking collection that were just inserted
-   await tracking.deleteMany({
+      await tracking.deleteMany({
         _id: { $in: insertedIds }, // Match the _id of the records inserted into VehicletrackingLogs
       });
 
@@ -103,28 +104,40 @@ export const scheduleTask = () => {
   });
 };
 
-
 export const scheduleTask2 = async () => {
   schedule.scheduleJob("0 0 * * *", async () => {
     try {
       // Calculate the date range (4 days ago to 1 day ago)
       const now = new Date();
-      const fourDaysAgo = new Date(now.setDate(now.getDate() - 4)).setHours(0, 0, 0, 0); // 4 days ago (at midnight)
-      const oneDayAgo = new Date(now.setDate(now.getDate() - 1)).setHours(0, 0, 0, 0); // 1 day ago (at midnight)
+      const fourDaysAgo = new Date(now.setDate(now.getDate() - 4)).setHours(
+        0,
+        0,
+        0,
+        0
+      ); // 4 days ago (at midnight)
+      const oneDayAgo = new Date(now.setDate(now.getDate() - 1)).setHours(
+        0,
+        0,
+        0,
+        0
+      ); // 1 day ago (at midnight)
 
-      const data = await VehicletrackingLogs.aggregate([
-        {
-          $match: {
-            createdAt: {
-              $gte: new Date(fourDaysAgo),  // from 4 days ago
-              $lt: new Date(oneDayAgo),     // until 1 day ago (exclusive)
-            }
-          }
-        },
-      ], { allowDiskUse: true });
+      const data = await VehicletrackingLogs.aggregate(
+        [
+          {
+            $match: {
+              createdAt: {
+                $gte: new Date(fourDaysAgo), // from 4 days ago
+                $lt: new Date(oneDayAgo), // until 1 day ago (exclusive)
+              },
+            },
+          },
+        ],
+        { allowDiskUse: true }
+      );
 
       await createExcelFile(data);
-      
+
       // Delete the records after processing
       const insertedIds = data.map((record) => record._id);
       await VehicletrackingLogs.deleteMany({
@@ -136,10 +149,9 @@ export const scheduleTask2 = async () => {
   });
 };
 
-
 const createExcelFile = async (data: any[]) => {
   const modifiedData = data.map((item) => {
-    if (item._id && typeof item._id.toString === 'function') {
+    if (item._id && typeof item._id.toString === "function") {
       item._id = item._id.toString();
     }
     return item;
@@ -154,106 +166,97 @@ const createExcelFile = async (data: any[]) => {
   const mydata = fs.readFileSync("output.xlsx");
 
   const currentDate = new Date();
-  const formattedDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}_` +
-                        `${String(currentDate.getHours()).padStart(2, '0')}-${String(currentDate.getMinutes()).padStart(2, '0')}-` +
-                        `${String(currentDate.getSeconds()).padStart(2, '0')}`;
-  
+  const formattedDate =
+    `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}-${String(currentDate.getDate()).padStart(2, "0")}_` +
+    `${String(currentDate.getHours()).padStart(2, "0")}-${String(
+      currentDate.getMinutes()
+    ).padStart(2, "0")}-` +
+    `${String(currentDate.getSeconds()).padStart(2, "0")}`;
+
   let filename = `trackingData_${formattedDate}.xlsx`;
   const fileObject = {
     file: mydata,
-    filename:filename, 
+    filename: filename,
   };
-   await uploadFile(fileObject);
+  await uploadFile(fileObject);
 };
 
-
-
-
 export const sendNotificationBefore7Days = () => {
-  schedule.scheduleJob('0 0 0 * * *', async () => {
+  schedule.scheduleJob("0 0 0 * * *", async () => {
     try {
-      // const startTime = Date.now(); 
-    
+      // const startTime = Date.now();
+
       const currentDate = new Date(); // Current date and time
       const sevenDaysFromNow = new Date(currentDate);
       sevenDaysFromNow.setDate(currentDate.getDate() + 360); // Add 7 days to the current date
-    
+
       const data = await UserDevices.aggregate(
         [
           {
             $match: {
-              subscriptionexp: { // Match expDate within the next 7 days
-                $gte: currentDate,  // expDate should be greater than or equal to today
+              subscriptionexp: {
+                // Match expDate within the next 7 days
+                $gte: currentDate, // expDate should be greater than or equal to today
                 $lte: sevenDaysFromNow, // expDate should be less than or equal to 7 days from now
-              }
-            }
+              },
+            },
           },
           {
             $lookup: {
-              from: "users",        // Join with the 'users' collection
+              from: "users", // Join with the 'users' collection
               localField: "ownerID", // Field in the current collection to match
-              foreignField: "_id",   // Field in the 'users' collection to match
-              as: "userDetails"      // Name of the new array field with matched documents
-            }
+              foreignField: "_id", // Field in the 'users' collection to match
+              as: "userDetails", // Name of the new array field with matched documents
+            },
           },
           {
-            $unwind: "$userDetails" // Deconstruct the 'userDetails' array into individual documents
+            $unwind: "$userDetails", // Deconstruct the 'userDetails' array into individual documents
           },
           {
             $sort: { createdAt: -1 }, // Sort by createdAt field in descending order
           },
           {
             $project: {
-              imei:1,
-              subscriptionexp:1,
-              ownerID:1,
-              'userDetails.firebaseToken':1,
-              'userDetails.Name':1,
-              'userDetails.emailAddress':1,
-
+              imei: 1,
+              subscriptionexp: 1,
+              ownerID: 1,
+              "userDetails.firebaseToken": 1,
+              "userDetails.Name": 1,
+              "userDetails.emailAddress": 1,
             }, // Limit the number of documents to 30,000
           },
         ],
         { allowDiskUse: true }
       );
-      data.map(async (val,i)=>{
+      data.map(async (val, i) => {
         const emailpayload: any = {
           to: val.userDetails.emailAddress,
           subject: `Subscription Reminder`,
           body: ExpirySubscriptionMail(val),
         };
-       await helper.sendEmail(emailpayload)
-      })
-   
+        await helper.sendEmail(emailpayload);
+      });
+
       // const endTime = Date.now(); // Record the end time of the task
-      // const executionTime = (endTime - startTime) / 1000; 
+      // const executionTime = (endTime - startTime) / 1000;
       // console.log(`Task executed in ${executionTime} seconds.`);
-    
     } catch (err) {
       console.error(
         "Error during aggregation, insertion, or deletion:",
         JSON.stringify(err)
       );
     }
-    
   });
 };
 
-
-
-
-
-
-
-
-
-
-
-export const UploadAndcreateExcelFile = async (data: any[]) => {
+export const UploadAndcreateExcelFile = async (data: any[], name: any) => {
   try {
     // Modify the data to ensure any object IDs are converted to strings
     const modifiedData = data.map((item) => {
-      if (item._id && typeof item._id.toString === 'function') {
+      if (item._id && typeof item._id.toString === "function") {
         item._id = item._id.toString();
       }
       return item;
@@ -267,20 +270,25 @@ export const UploadAndcreateExcelFile = async (data: any[]) => {
     xlsx.utils.book_append_sheet(wb, ws, "Sheet 1");
 
     // Convert the workbook to a buffer in memory
-    const buffer = xlsx.write(wb, { bookType: 'xlsx', type: 'buffer' });
+    const buffer = xlsx.write(wb, { bookType: "xlsx", type: "buffer" });
 
     // Create a unique filename based on the current date and time
     const currentDate = new Date();
-    const formattedDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}_` +
-                          `${String(currentDate.getHours()).padStart(2, '0')}-${String(currentDate.getMinutes()).padStart(2, '0')}-` +
-                          `${String(currentDate.getSeconds()).padStart(2, '0')}`;
+    const formattedDate =
+      `${currentDate.getFullYear()}-${String(
+        currentDate.getMonth() + 1
+      ).padStart(2, "0")}-${String(currentDate.getDate()).padStart(2, "0")}_` +
+      `${String(currentDate.getHours()).padStart(2, "0")}-${String(
+        currentDate.getMinutes()
+      ).padStart(2, "0")}-` +
+      `${String(currentDate.getSeconds()).padStart(2, "0")}`;
 
-    const filename = `Summary_${formattedDate}.csv`;
+    const filename = `${name}_${formattedDate}.csv`;
 
     // Prepare the file object with buffer and filename
     const fileObject = {
       file: buffer,
-      filename: filename
+      filename: filename,
     };
 
     // Upload the file using your upload function
@@ -289,10 +297,87 @@ export const UploadAndcreateExcelFile = async (data: any[]) => {
 
     // Return the upload result
     return files;
-
   } catch (err) {
-    console.error('Error creating or uploading the Excel file:', err);
-    throw new Error('Internal Server Error');
+    console.error("Error creating or uploading the Excel file:", err);
+    throw new Error("Internal Server Error");
   }
 };
 
+import mongoose from "mongoose";
+
+function flattenObject(obj: any, parentKey: any = "", result: any = {}) {
+  for (let key in obj) {
+    if (obj.hasOwnProperty(key)) {
+      let newKey = parentKey ? `${parentKey}.${key}` : key;
+
+      if (obj[key] instanceof mongoose.Types.ObjectId) {
+        result[newKey] = obj[key].toString(); // Convert ObjectId to string
+      } else if (
+        typeof obj[key] === "object" &&
+        obj[key] !== null &&
+        !Array.isArray(obj[key])
+      ) {
+        flattenObject(obj[key], newKey, result);
+      } else if (Array.isArray(obj[key])) {
+        obj[key].forEach((item, index) => {
+          if (item instanceof mongoose.Types.ObjectId) {
+            result[`${newKey}[${index}]`] = item.toString();
+          } else if (typeof item === "object" && item !== null) {
+            flattenObject(item, `${newKey}[${index}]`, result);
+          } else {
+            result[`${newKey}[${index}]`] = item;
+          }
+        });
+      } else {
+        result[newKey] = obj[key];
+      }
+    }
+  }
+  return result;
+}
+
+export const DownloadExcelForMongoDB = async (
+  data: any,
+  filename = "exported_data"
+) => {
+  try {
+    const flattenedData = data.map((item: any) => flattenObject(item));
+    const modifiedData = flattenedData.map(
+      (item: { _id: { toString: () => any }; id: { toString: () => any } }) => {
+        if (item._id && typeof item._id.toString === "function") {
+          item._id = item._id.toString();
+        }
+        if (item.id && typeof item.id.toString === "function") {
+          item.id = item.id.toString();
+        }
+        return item;
+      }
+    );
+
+    const ws = xlsx.utils.json_to_sheet(modifiedData);
+    const wb = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(wb, ws, "Sheet 1");
+    const buffer = xlsx.write(wb, { bookType: "csv", type: "array" });
+    const fileBuffer = Buffer.from(buffer);
+    
+    const currentDate = new Date();
+    const formattedDate =
+      `${currentDate.getFullYear()}-${String(
+        currentDate.getMonth() + 1
+      ).padStart(2, "0")}-${String(currentDate.getDate()).padStart(2, "0")}_` +
+      `${String(currentDate.getHours()).padStart(2, "0")}-${String(
+        currentDate.getMinutes()
+      ).padStart(2, "0")}-` +
+      `${String(currentDate.getSeconds()).padStart(2, "0")}`;
+    const finalFilename = `${filename}_${formattedDate}.csv`;
+    const fileObject = {
+      file: fileBuffer,
+      filename: finalFilename,
+    };
+    let files = await uploadFile(fileObject);
+    return files;
+  } catch (err) {
+    console.error("Error creating Excel file:", err);
+    throw new Error("Internal Server Error");
+  }
+};

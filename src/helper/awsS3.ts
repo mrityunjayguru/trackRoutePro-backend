@@ -29,8 +29,7 @@ export const uploadFile = async (body: any) => {
       ContentType: body.contentType, // Use the dynamic ContentType
     });
 
-    const response = await client.send(command);
-console.log(response)
+      await client.send(command);
     const url = `${body.filename}`;
     if (url) {
       return url;

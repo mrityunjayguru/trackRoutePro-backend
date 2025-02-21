@@ -176,7 +176,7 @@ export const loginWithMobile = async (req: Request, res: Response) => {
     });
 
     const token: any = await Users.getAccessToken();  // Fetch token
-    let datass=await User.updateOne(
+    await User.updateOne(
       { _id: Users._id },  // Ensure this is the correct user ID
       { $set: { token: token } }  // Use $set to update the token field
     );

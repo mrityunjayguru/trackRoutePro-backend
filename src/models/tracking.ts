@@ -79,9 +79,9 @@ export const vehicleTrackingSchema = new Schema(
     sat:{
       type: String,
     },
-    createdAt: {
-      type: Date,
-      default: new Date(),
+    createdAt: { 
+      type: Date, 
+      default: getISTDate, // Use the helper function to get IST date 
     },
   },
   { collection: "Vehicletracking" }
@@ -90,3 +90,9 @@ export const vehicleTrackingSchema = new Schema(
 vehicleTrackingSchema.index({ deviceIMEI: 1 });
 
 
+function getISTDate() {
+  const date = new Date();
+  const utcOffsetInMinutes = 5 * 60 + 30; // IST is UTC + 5:30
+  const istDate = new Date(date.getTime() + utcOffsetInMinutes * 60000);
+  return istDate;
+}

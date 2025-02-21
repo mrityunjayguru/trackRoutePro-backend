@@ -7,6 +7,7 @@ export const renewRequestSchema = new Schema(
     requestStatus: {
       type: String,
       enum: ["Pending", "Paid"],
+      default:"Pending"
     },
     RequestID: {
       type: String,

@@ -34,3 +34,5 @@ function getISTDate() {
     const istDate = new Date(date.getTime() + utcOffsetInMinutes * 60000);
     return istDate;
   }
+
+

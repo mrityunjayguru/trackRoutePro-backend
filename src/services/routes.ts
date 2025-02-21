@@ -24,7 +24,7 @@ import Relay from "./admin/Relay/_router"
 import deviceType from "./admin/deviceType/_router"
 import Imei from "./admin/Imei/_router"
 import termAndCondition from "./admin/termAndCondition/_router"
-
+import download from "./Download/_router"
 const app = express();
 app.use("/Auth", userLogin);
 app.use("/trackVehicle", tracking);
@@ -48,6 +48,7 @@ app.use("/adminAuth", login);
 app.use("/Relay",userAuth, Relay);
 app.use("/deviceType",userAuth, deviceType);
 app.use("/Imei",userAuth, Imei);
+app.use("/download",userAuth, download);
 app.use("/termAndCondition", termAndCondition);
 
 export default app;
