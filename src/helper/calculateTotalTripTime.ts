@@ -12,20 +12,19 @@ export const calculateTotalTripTime = (records: TripRecord[]): string => {
 
     let totalDuration = 0;
     let tripStart: any;
-console.log(records,"recordsrecords")
+
     records.forEach(record => {
         if (record.igitionOn) {
             tripStart = new Date(record.createdAt); // Start trip
-        } else if (record.igitionOF && tripStart) {
+        } else if (record.igitionOF==false && tripStart) {
             const tripEnd = new Date(record.createdAt);
             totalDuration += (tripEnd.getTime() - tripStart.getTime()) / 1000; // Convert ms to seconds
-            console.log(totalDuration,"totalDurationtotalDuration")
             tripStart = null; // Reset trip start after calculating
         }
     });
     // If the last trip is still running, add time up to the current moment
     if (tripStart) {
-        totalDuration +=  tripStart.getTime() / 1000; // Convert ms to seconds
+        totalDuration += (Date.now() - tripStart.getTime()) / 1000; // Convert ms to seconds
     }
 
     // Convert total seconds to HH:MM:SS format
